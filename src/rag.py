@@ -52,6 +52,7 @@ class RAGPipeline:
                          "content": f"Source excerpts:\n\n{format_context(chunks)}\n\nQuestion: {question}"})
 
         answer = self.llm.chat(messages)
+        answer = re.sub(r"【(\d+)†[^】]*】", r"[\1]", answer)  # normalize gpt-oss citation style
         cited = used_citations(answer, len(chunks)) or list(range(1, len(chunks) + 1))
         citations = [{"n": n, "label": citation_label(chunks[n - 1]["metadata"]),
                       "snippet": chunks[n - 1]["text"][:300]} for n in cited]

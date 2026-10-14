@@ -25,7 +25,7 @@ steps:
       - --max-instances=2
       - --timeout=900
       - --set-secrets=LLM_API_KEY=LLM_API_KEY:latest
-      - --set-env-vars=LLM_MODEL=gemini-3.8-flash,LLM_REASONING_EFFORT=low
+      - --set-env-vars=LLM_MODEL=openai/gpt-oss-120b,LLM_BASE_URL=https://api.groq.com/openai/v1,LLM_REASONING_EFFORT=low
 
 images:
   - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA

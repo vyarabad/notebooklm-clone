@@ -1,11 +1,9 @@
-
-
 # NotebookLM Clone
 
 A full-stack RAG app inspired by Google NotebookLM. Create notebooks, add sources (PDF, PPTX, TXT, web URLs), chat with them and get answers with citations, and generate a report or a quiz with an answer key.
 
-- **Live app:** https://huggingface.co/spaces/YOUR_USERNAME/YOUR_SPACE
-- **GitHub:** https://github.com/YOUR_USERNAME/YOUR_REPO
+- **Live app:** https://notebook-app-614268852432.us-central1.run.app
+- **GitHub:** https://github.com/vyarabad/notebooklm-clone
 - **Architecture:** [docs/architecture.md](docs/architecture.md)
 - **RAG evaluation:** [eval/results.md](eval/results.md)
 
@@ -16,7 +14,7 @@ A full-stack RAG app inspired by Google NotebookLM. Create notebooks, add source
 - **RAG chat:** answers are grounded in the notebook's sources with numbered citations like `[1]`, plus a panel showing the exact retrieved chunks and response time. Chat history is saved per notebook.
 - **Two retrieval methods:** plain vector search, or vector search + cross-encoder reranking (switchable in the UI).
 - **Artifacts:** report and quiz (with answer key) saved as `.md`, viewable and downloadable. Old artifacts can be reopened.
-- **Error handling:** friendly messages for bad files, scanned PDFs, bad URLs, empty notebooks, and missing API keys.
+- **Error handling:** friendly messages for bad files, scanned PDFs, bad URLs, empty notebooks, missing API keys, and LLM errors.
 
 ## Tech stack
 
@@ -26,19 +24,21 @@ A full-stack RAG app inspired by Google NotebookLM. Create notebooks, add source
 | Embeddings | `sentence-transformers/all-MiniLM-L6-v2` (local, CPU) |
 | Reranker | `cross-encoder/ms-marco-MiniLM-L-6-v2` |
 | Vector DB | ChromaDB (persistent) |
-| LLM | Any OpenAI-compatible API (default: Gemini 2.5 Flash) |
+| LLM | Groq, GPT OSS 120B (OpenAI-compatible API) |
 | Extraction | pypdf, python-pptx, requests + BeautifulSoup |
-| Hosting | Hugging Face Spaces |
-| CI/CD | GitHub Actions |
+| Hosting | Google Cloud Run (Docker container) |
+| CI/CD | Cloud Build trigger (deploy) + GitHub Actions (tests) |
+
+**Why Groq:** Gemini was tested first but returned frequent 503 "high demand" errors and slow responses. Groq is fast (about 500 tokens/sec) and reliable. The LLM client is OpenAI-compatible, so switching providers only means changing `LLM_BASE_URL` and `LLM_MODEL`.
 
 ## Run locally
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git
-cd YOUR_REPO
+git clone https://github.com/vyarabad/notebooklm-clone.git
+cd notebooklm-clone
 python -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env                                  # then put your API key in .env
+cp .env.example .env                                  # then put your Groq key in .env
 python app.py
 ```
 
@@ -50,15 +50,17 @@ Run tests: `pip install -r requirements-dev.txt && pytest`
 
 | Variable | Required | Default | Purpose |
 |---|---|---|---|
-| `LLM_API_KEY` | yes | | API key for the LLM provider |
-| `LLM_BASE_URL` | no | Gemini OpenAI-compatible URL | Change to use Groq, OpenAI, etc. |
-| `LLM_MODEL` | no | `gemini-2.5-flash` | Model name |
+| `LLM_API_KEY` | yes | | API key for the LLM provider (Groq) |
+| `LLM_BASE_URL` | no | `https://api.groq.com/openai/v1` | Any OpenAI-compatible endpoint |
+| `LLM_MODEL` | no | `openai/gpt-oss-120b` | Model name |
+| `LLM_REASONING_EFFORT` | no | (unset) | `low` makes reasoning models answer faster |
 | `DATA_DIR` | no | `data` | Where notebooks and the vector DB are stored |
 | `EMBED_MODEL` | no | `all-MiniLM-L6-v2` | Embedding model |
 | `RERANK_MODEL` | no | `ms-marco-MiniLM-L-6-v2` | Reranker model |
 | `CHUNK_SIZE` / `CHUNK_OVERLAP` | no | `1000` / `150` | Chunking settings (characters) |
+| `PORT` | no | `7860` (Cloud Run sets `8080`) | Port the app listens on |
 
-API keys are never committed. Locally they live in `.env` (gitignored). On Hugging Face they are Space secrets, and the deploy token is a GitHub Actions secret.
+API keys are never committed. Locally they live in `.env` (gitignored). On Cloud Run the key is stored in **Google Secret Manager** and injected as `LLM_API_KEY` at deploy time.
 
 ## Project structure
 
@@ -81,10 +83,11 @@ eval/
   run_eval.py          compares the two retrieval methods
   questions.json       test questions
   results.md           evaluation results
-tests/                 unit tests (run in CI)
+tests/                 unit tests (run in GitHub Actions)
 docs/architecture.md   architecture document
-.github/workflows/     CI/CD to Hugging Face Spaces
-Dockerfile             optional, for Cloud Run / Render / Railway
+Dockerfile             container image for Cloud Run
+cloudbuild.yaml        build, push, and deploy steps for Cloud Build
+.github/workflows/     GitHub Actions CI (syntax check + unit tests)
 ```
 
 ## How data is stored
@@ -104,11 +107,9 @@ Each notebook gets a UUID. Sources, chats, and artifacts all live under that ID,
 
 ### Storage limitations
 
-On free Hugging Face Spaces the disk is **ephemeral**: data survives page refreshes and app sleep/wake within the same container, but is wiped when the Space restarts or redeploys (for example after every push). Two options if this matters:
-1. Enable paid persistent storage on the Space and set the `DATA_DIR` secret/variable to `/data`.
-2. Run locally, where `data/` persists normally.
+Cloud Run's local disk is **ephemeral**. Data survives while the container is running, but is wiped when the service scales to zero, restarts, or redeploys (for example after every push). Running locally, `data/` persists normally.
 
-No extra infrastructure was added to work around this, as the assignment allows.
+If persistence on Cloud Run were needed, the storage layer (`storage.py`) could be swapped for Firestore or Cloud Storage without touching the rest of the app. This was not added, since the assignment says to document storage limits rather than add unnecessary infrastructure.
 
 ## How to use
 
@@ -118,17 +119,27 @@ No extra infrastructure was added to work around this, as the assignment allows.
 4. In the **Artifacts** tab, click **Generate report** or **Generate quiz**. View it on the page and download the `.md`. Previous artifacts are in the **Saved artifacts** dropdown.
 5. Rename or delete notebooks from the left panel.
 
-## Deployment (Hugging Face Spaces + GitHub Actions)
+## Deployment (Google Cloud Run + Cloud Build)
 
-1. Create a new **Gradio** Space on Hugging Face (CPU basic is enough).
-2. In the Space settings, add a **secret** `LLM_API_KEY` (and `LLM_BASE_URL` / `LLM_MODEL` if not using Gemini).
-3. Create a Hugging Face access token with **write** permission.
-4. In the GitHub repo: **Settings > Secrets and variables > Actions**
-   - Secret: `HF_TOKEN` = your write token
-   - Variables: `HF_USERNAME` = your HF username, `HF_SPACE` = your Space name
-5. Push to `main`. The workflow runs tests, then pushes the code to the Space, which rebuilds automatically.
+One-time setup in Google Cloud:
 
-Flow: `code change > git push > GitHub Actions (test, deploy) > HF Space rebuild > updated app`
+1. Create a project and link billing.
+2. Enable APIs: Cloud Run Admin, Cloud Build, Artifact Registry, Secret Manager.
+3. Artifact Registry: create a Docker repo `notebook-repo` in `us-central1`.
+4. Secret Manager: create secret `LLM_API_KEY` with the Groq key.
+5. IAM: give the default compute service account Cloud Run Admin, Service Account User, Artifact Registry Writer, Logs Writer, and Secret Manager Secret Accessor.
+6. Cloud Build: connect the GitHub repo (2nd gen) and create a trigger on push to `main` that uses `cloudbuild.yaml`.
+
+CI/CD flow:
+
+```
+code change > git push (main)
+   ├─ GitHub Actions: syntax check + unit tests
+   └─ Cloud Build trigger: docker build > push to Artifact Registry > deploy to Cloud Run
+                                                                      > updated app live
+```
+
+The container uses 2 GiB of memory, scales from 0 to 2 instances, and has a 900s request timeout so slow LLM calls aren't cut off. The first request after idle is slow (cold start + model load).
 
 ## RAG evaluation
 
