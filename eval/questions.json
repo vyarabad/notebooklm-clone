@@ -1,0 +1,7 @@
+[
+  {"question": "REPLACE ME: a simple fact question from doc 1", "expected": "what the right answer is"},
+  {"question": "REPLACE ME: a question whose answer is spread across two paragraphs", "expected": ""},
+  {"question": "REPLACE ME: a question using different words than the document", "expected": ""},
+  {"question": "REPLACE ME: a question comparing two of your sources", "expected": ""},
+  {"question": "REPLACE ME: a question the sources can't answer (should say not found)", "expected": "not found"}
+]

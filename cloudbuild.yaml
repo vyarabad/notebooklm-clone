@@ -1,0 +1,35 @@
+substitutions:
+  _REGION: us-central1
+  _REPO: notebook-repo
+  _SERVICE: notebook-app
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: [build, -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA", "."]
+
+  - name: gcr.io/cloud-builders/docker
+    args: [push, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA"]
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+      - --memory=2Gi
+      - --min-instances=0
+      - --max-instances=2
+      - --timeout=300
+      - --set-secrets=LLM_API_KEY=LLM_API_KEY:latest
+      - --set-env-vars=LLM_MODEL=gemini-3.8-flash
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
+
+timeout: 1800s
+options:
+  logging: CLOUD_LOGGING_ONLY
