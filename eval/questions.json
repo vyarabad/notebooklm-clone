@@ -1,7 +1,8 @@
 [
-  {"question": "REPLACE ME: a simple fact question from doc 1", "expected": "what the right answer is"},
-  {"question": "REPLACE ME: a question whose answer is spread across two paragraphs", "expected": ""},
-  {"question": "REPLACE ME: a question using different words than the document", "expected": ""},
-  {"question": "REPLACE ME: a question comparing two of your sources", "expected": ""},
-  {"question": "REPLACE ME: a question the sources can't answer (should say not found)", "expected": "not found"}
+  {"question": "What file types must the app support for ingestion?", "expected": "PDF, PPTX, TXT, and web URLs"},
+  {"question": "What artifacts are required and what format are they saved in?", "expected": "A report and a quiz with an answer key, saved as .md"},
+  {"question": "What should the deployment demonstration show?", "expected": "Live platform, notebook, adding a source, RAG question, citation, artifact, GitHub Actions deploy"},
+  {"question": "Where must API tokens be stored for CI/CD?", "expected": "GitHub Secrets, not committed to the repo"},
+  {"question": "What should students do if the deployment has persistent storage limits?", "expected": "Document the limitations instead of adding unnecessary infrastructure"},
+  {"question": "What is the professor's favorite color?", "expected": "Not in the sources; should say it can't find it"}
 ]

@@ -257,7 +257,7 @@ with gr.Blocks(title="NotebookLM Clone", theme=gr.themes.Soft()) as demo:
                                           show_label=False, scale=5)
                     ask_btn = gr.Button("Send", variant="primary", scale=1)
                 with gr.Row():
-                    method = gr.Radio(METHODS, value="vector", label="Retrieval method")
+                    method = gr.Radio(METHODS, value="rerank", label="Retrieval method")
                     top_k = gr.Slider(2, 10, value=5, step=1, label="Chunks to retrieve")
                 with gr.Accordion("Retrieved chunks for the last answer", open=False):
                     chunks_md = gr.Markdown()
